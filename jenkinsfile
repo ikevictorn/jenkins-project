@@ -1,0 +1,49 @@
+pipeline {
+        agent any
+
+        environment {
+            REGISTRY = 'victornna'       // Replace with your Docker Hub username
+            IMAGE_NAME = 'victornna/jumpq-web'             // Replace with your desired image name
+            CREDENTIALS_ID = 'dockerhub-credentials'  // Replace with your credentials ID
+        }
+
+        stages {
+            stage('Checkout') {
+                steps {
+                    // Pull the latest code
+                    checkout scm
+                }
+            }
+
+            stage('Build and Tag') {
+                steps {
+                    script {
+                        // Get the commit SHA for tagging
+                        COMMIT_HASH = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+
+                        // Build and tag the Docker image
+                        sh """
+                        docker build -t $REGISTRY/$IMAGE_NAME:$COMMIT_HASH .
+                        docker tag $REGISTRY/$IMAGE_NAME:$COMMIT_HASH $REGISTRY/$IMAGE_NAME:latest
+                        """
+                    }
+                }
+            }
+
+            stage('Push') {
+                steps {
+                    script {
+                        // Login and push the image
+                        withCredentials([usernamePassword(credentialsId: CREDENTIALS_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                            sh """
+                            echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                            docker push $REGISTRY/$IMAGE_NAME:$COMMIT_HASH
+                            docker push $REGISTRY/$IMAGE_NAME:latest
+                            """
+                        }
+                    }
+                }
+            }
+        }
+    }
+
